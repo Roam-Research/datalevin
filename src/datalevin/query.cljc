@@ -1151,15 +1151,17 @@
                    (when (dp/pull? find)
                      [(-context-resolve (:source find) context)
                       (dpp/parse-pull
-                        (-context-resolve (:pattern find) context))]))]
-    (for [tuple resultset]
-      (mapv (fn [env el]
-              (if env
-                (let [[src spec] env]
-                  (dpa/pull-spec src spec [el] false))
-                el))
-            resolved
-            tuple))))
+                       (-context-resolve (:pattern find) context))]))]
+    (->> (for [tuple resultset]
+           (mapv (fn [env el]
+                   (if env
+                     (let [[src spec] env]
+                       (dpa/pull-spec src spec [el] false))
+                     el))
+                 resolved
+                 tuple))
+         ;; realize lazy seq because this is the last step anyways, and because if we don't realize right now then binding for timeout/*deadline* does not work
+         doall)))
 
 (def ^:private query-cache (volatile! (datalevin.lru/lru lru-cache-size
                                                          :constant)))
