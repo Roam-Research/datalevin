@@ -232,3 +232,27 @@
 
     (d/close conn)
     (u/delete-files dir)))
+
+;; very similar to `retract-then-transact-again-test` but checking with explicitly passing datoms 
+(deftest retract-datoms-then-assert-again-test
+  (let [dir  (u/tmp-dir (str "retract-transact-test-" (UUID/randomUUID)))
+        conn (d/create-conn dir
+                            {:id       {:db/unique    :db.unique/identity
+                                        :db/valueType :db.type/string}
+                             :foo/refs {:db/valueType   :db.type/ref
+                                        :db/cardinality :db.cardinality/many}})]
+    (d/transact! conn [{:id "foo" :foo/refs [{:id "bar"}]}])
+    (is (= 3 (count (d/datoms @conn :eav))))
+    (is (= #{(d/entity @conn 2)}
+           (:foo/refs (d/touch (d/entity @conn [:id "foo"])))))
+
+    ;; very similar to `retract-then-transact-again-test` but checking if explicitly passing datoms works 
+    (d/transact! conn [(d/datom 1 :foo/refs 2 500 false)
+                       (d/datom 1 :foo/refs 2 500 true)])
+
+    (is (= 3 (count (d/datoms @conn :eav))))
+    (is (= #{(d/entity @conn 2)}
+           (:foo/refs (d/touch (d/entity @conn [:id "foo"])))))
+
+    (d/close conn)
+    (u/delete-files dir)))
