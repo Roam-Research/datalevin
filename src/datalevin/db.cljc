@@ -404,6 +404,7 @@
   ([datoms dir schema] (init-db datoms dir schema nil))
   ([datoms dir schema opts]
    {:pre [(or (nil? schema) (map? schema))]}
+   ;; commented out below in our fork because for import, we rely on datoms being a lazy list and this realizes the whole list
    #_(when-some [not-datom (first (drop-while datom? datoms))]
        (raise "init-db expects list of Datoms, got " (type not-datom)
               {:error :init-db}))
