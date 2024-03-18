@@ -208,3 +208,51 @@
 
     (d/close conn)
     (u/delete-files dir)))
+
+
+;; recreating the test from https://github.com/juji-io/datalevin/commit/e34d88b45ded14111e6c8bb213ca65216df2f47e#diff-1ac9ad202f2259dd8a2bb6dde9a5671d39331f6d7f430f923b51164a8d2c2319
+(deftest retract-then-transact-again-test
+  (let [dir  (u/tmp-dir (str "retract-transact-test-" (UUID/randomUUID)))
+        conn (d/create-conn dir
+                            {:id       {:db/unique    :db.unique/identity
+                                        :db/valueType :db.type/string}
+                             :foo/refs {:db/valueType   :db.type/ref
+                                        :db/cardinality :db.cardinality/many}})]
+    (d/transact! conn [{:id "foo" :foo/refs [{:id "bar"}]}])
+    (is (= 3 (count (d/datoms @conn :eav))))
+    (is (= #{(d/entity @conn 2)}
+           (:foo/refs (d/touch (d/entity @conn [:id "foo"])))))
+
+    (d/transact! conn [[:db/retract [:id "foo"] :foo/refs]
+                       {:id       "foo"
+                        :foo/refs [{:id "bar"}]}])
+    (is (= 3 (count (d/datoms @conn :eav))))
+    (is (= #{(d/entity @conn 2)}
+           (:foo/refs (d/touch (d/entity @conn [:id "foo"])))))
+
+    (d/close conn)
+    (u/delete-files dir)))
+
+;; very similar to `retract-then-transact-again-test` but checking with explicitly passing datoms 
+(deftest retract-datoms-then-assert-again-test
+  (let [dir  (u/tmp-dir (str "retract-transact-test-" (UUID/randomUUID)))
+        conn (d/create-conn dir
+                            {:id       {:db/unique    :db.unique/identity
+                                        :db/valueType :db.type/string}
+                             :foo/refs {:db/valueType   :db.type/ref
+                                        :db/cardinality :db.cardinality/many}})]
+    (d/transact! conn [{:id "foo" :foo/refs [{:id "bar"}]}])
+    (is (= 3 (count (d/datoms @conn :eav))))
+    (is (= #{(d/entity @conn 2)}
+           (:foo/refs (d/touch (d/entity @conn [:id "foo"])))))
+
+    ;; very similar to `retract-then-transact-again-test` but checking if explicitly passing datoms works 
+    (d/transact! conn [(d/datom 1 :foo/refs 2 500 false)
+                       (d/datom 1 :foo/refs 2 500 true)])
+
+    (is (= 3 (count (d/datoms @conn :eav))))
+    (is (= #{(d/entity @conn 2)}
+           (:foo/refs (d/touch (d/entity @conn [:id "foo"])))))
+
+    (d/close conn)
+    (u/delete-files dir)))

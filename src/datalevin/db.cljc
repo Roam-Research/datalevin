@@ -404,6 +404,7 @@
   ([datoms dir schema] (init-db datoms dir schema nil))
   ([datoms dir schema opts]
    {:pre [(or (nil? schema) (map? schema))]}
+   ;; commented out below in our fork because for import, we rely on datoms being a lazy list and this realizes the whole list
    #_(when-some [not-datom (first (drop-while datom? datoms))]
        (raise "init-db expects list of Datoms, got " (type not-datom)
               {:error :init-db}))
@@ -843,7 +844,21 @@
       (transact-report report new-datom)
 
       (= (.-v old-datom) v)
-      (update report ::tx-redundant conjv new-datom)
+      ;; Following is a bugfix cherrypicked from datalevin master. The issue was that if we had a transaction with a retraction and then assertion of same datom, the latter assertion was not happening
+      ;; 1. Initial issue: https://github.com/juji-io/datalevin/issues/192
+      ;;      was fixed in commit: https://github.com/juji-io/datalevin/commit/e34d88b45ded14111e6c8bb213ca65216df2f47e#diff-1ac9ad202f2259dd8a2bb6dde9a5671d39331f6d7f430f923b51164a8d2c2319L859-R865
+      ;;      #_(if (is-attr? db a :db/unique)
+      ;;          (update report ::tx-redundant conjv new-datom)
+      ;;          (transact-report report new-datom))
+      ;; 2. However, 1 was incomplete/lead to another issue https://github.com/juji-io/datalevin/issues/207
+      ;;      this was then fixed in https://github.com/juji-io/datalevin/commit/6c9aea4e250b4d6db8d83ba1eab0fb4a565c841b
+      
+      ;; this latest change (which is the state in datalevin master) works because datom equivalence check cehcks only for e a v same. See `datalevin.datom/equiv-datom`
+      (if (some #(and (not (datom-added %)) (= % new-datom))
+                (:tx-data report))
+        ;; special case: retract then transact the same datom
+        (transact-report report new-datom)
+        (update report ::tx-redundant conjv new-datom))
 
       :else
       (-> report
